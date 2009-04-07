@@ -1,0 +1,32 @@
+musicbrainz.py
+================================
+
+what this is
+---------------------
+
+a sonata plugin that interprets files' metadata about musicbrainz, queries the
+musicbrainz server and displays information acquired (currently, only hyperlinks).
+
+by doing so, the plugin tries to explore the needs of plugins in sonata.
+
+what this is not
+---------------------
+
+this plugin will be absolutely useless if the files are not musicbrainz tagged,
+eg by musicbrainz picard. it will not try to guess which song this is in
+musicbrainz, and does not support writing any tags. picard is more suited for
+this job. (adding an option to launch picard on an unknown file is probably as
+far as it will get on that issue.)
+
+open issues
+---------------------
+
+no caching is done, resulting in hits on the mb servers on every track change
+(this is even a security issue, enabling them to track what you hear, in
+theory). will have to investigate if there is some cross-app way of doing so.
+
+no asynchronous processing or threaded processing is done, resulting in user
+interface lockup while the queries are processed.
+
+the on_change_song hook is implemented very crudely, so exceptions thrown from
+the plugin stop album art from working.
