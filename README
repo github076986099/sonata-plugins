@@ -30,3 +30,6 @@ interface lockup while the queries are processed.
 
 the on_change_song hook is implemented very crudely, so exceptions thrown from
 the plugin stop album art from working.
+
+a side effect of the current implementation is that on sonata startup, no
+on_change_song is emitted and therefore the musicbrainz tab stays blank.
