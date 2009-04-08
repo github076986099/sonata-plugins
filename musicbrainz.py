@@ -44,7 +44,7 @@ import sexy
 import webbrowser
 
 # sonata imports
-import misc
+from sonata import misc
 
 # up to now, no musicbrainz api used
 import musicbrainz2.webservice as mb_ws
