@@ -104,14 +104,17 @@ class MusicBrainzPlugin(object):
         # _(x) == x will be a sane default
 
     def on_change_song(self, songinfo):
-        self.mb_data = self._extract_mb_data(songinfo)
+        if songinfo:
+            self.mb_data = self._extract_mb_data(songinfo)
+
+            # help  in development
+            logging.info("song changed")
+            for k,v in sorted(songinfo.items()):
+                logging.info("\t %s %r", k,v)
+        else:
+            self.mb_data = {}
 
         self._update_display()
-
-        # help  in development
-        logging.info("song changed")
-        for k,v in sorted(songinfo.items()):
-            logging.info("\t %s %r", k,v)
 
     ############################### recurring events
     def _extract_mb_data(self, songinfo):
