@@ -13,7 +13,10 @@
 # url: non yet
 # [capabilities]
 # tabs: construct_tab
+# playing_song_observers: on_song_change
+# enablables: on_enable
 ### END PLUGIN INFO
+
 
 # maybe we should not have capabilities, but just specify the
 # class name like:
@@ -34,10 +37,13 @@
 
 ############################################# real end of plugin info
 
+
 import gtk
 
 import logging
-#logging.root.setLevel(logging.DEBUG)
+logging.root.setLevel(logging.INFO)
+
+from weakref import ref as weakref
 
 # not the ways sonata goes for, but more pythonic
 import sexy
@@ -68,23 +74,30 @@ def get_hyperlink(o, label):
 
 ############################################# the plugin
 class MusicBrainzPlugin(object):
+    # FIXME: plugin instance stuff does not work yet; there are many creations and no deletions!
+    __singleton = staticmethod(lambda:None)
+
     ############################### initialization
+    def __new__(cls):
+        """Implement singleton behavior in a way that if every real reference
+        to the instance is dropped (references through the class don't count
+        and are implemented as weakrefs), the singleton is destroyed
+        and re-created when neeed again"""
+        if cls.__singleton() is None:
+            r = super(cls, MusicBrainzPlugin).__new__(cls)
+            cls.__singleton = weakref(r)
+            return r
+        return cls.__singleton()
+
     def __init__(self):
-        self._hook_up_on_change_song()
-
-    def _hook_up_on_change_song(self):
-        # FIXME: hack. moreover, exceptions might stop artwork from being
-        # updated.
-        # there should just be a hook called every time a new song is "made
-        # active" (played or newly shown as paused at startup).
-        # currently hooked to artwork_update because that's what changes
-        # exactly when the song changes and is simple to hook to
-        import sonata.artwork
-
-        def new_update(inner_self, force=False, old_function=sonata.artwork.Artwork.artwork_update):
-            self.on_change_song(inner_self.songinfo)
-            old_function(inner_self, force)
-        sonata.artwork.Artwork.artwork_update = new_update
+        logging.info('creating new MusicBrainzPLugin instance')
+    def __del__(self):
+        # finishing things off here is quite dangerous (would, for example, not
+        # work if on_link_clicked was not a staticmethod).
+        # having a proper close() method that also finished off the singleton
+        # instance would make things easier, yet still leave the issue of
+        # objects staying in memory longer than they need.
+        logging.info('deleting MusicBrainzPLugin instance')
 
     ############################### hooks
     def construct_tab(self):
@@ -103,7 +116,7 @@ class MusicBrainzPlugin(object):
         # plugins will want to bring their own gettext translations; for now,
         # _(x) == x will be a sane default
 
-    def on_change_song(self, songinfo):
+    def on_song_change(self, songinfo):
         if songinfo:
             self.mb_data = self._extract_mb_data(songinfo)
 
@@ -159,6 +172,7 @@ class MusicBrainzPlugin(object):
             u'http://musicbrainz.org/ns/rel-1.0#Review': _('review'),
             u'http://musicbrainz.org/ns/rel-1.0#Youtube': _('youtube'),
             u'http://musicbrainz.org/ns/rel-1.0#OnlineCommunity': _('online community'), # FIXME: give more detailed information in link
+            u'http://musicbrainz.org/ns/rel-1.0#Blog': _('blog'),
             # cummulative FIXME:
             # * for non-1:1 relations, there's a need for more detailed display
             #   (have seen numerous fan pages, they should go by url in an own
@@ -199,12 +213,29 @@ class MusicBrainzPlugin(object):
 
         self.label.set_markup('\n'.join(infos))
 
-    def on_link_clicked(self, widget, url):
+    @staticmethod
+    def on_link_clicked(widget, url):
         webbrowser.open(url)
 
 
 def construct_tab():
-    # if i registered to more hooks, i'd have to make sure this is a single
-    # instance.
-    p = MusicBrainzPlugin()
-    return p.construct_tab()
+    logging.info('construct_tab called')
+    return MusicBrainzPlugin().construct_tab()
+
+def on_song_change(songinfo):
+    logging.info('on_song_change called, %r', songinfo)
+    return MusicBrainzPlugin().on_song_change(songinfo)
+
+plugin_instance = None
+
+def on_enable(state):
+    # make sure the plugin instance is persistent as long as the plugin is
+    # loaded
+    global plugin_instance
+    if state == True:
+        logging.info("the MusicBrainzPlugin should report creation of a new instance and no destruction")
+        plugin_instance = MusicBrainzPlugin()
+    else:
+        logging.info("now the MusicBrainzPlugin should report its destruction")
+        plugin_instance = None
+        logging.info("did it?")
