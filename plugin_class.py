@@ -3,12 +3,43 @@ import weakref
 
 class meta(type):
     """A metaclass is needed to create adhoc class (not instance) members as wrappers"""
+    # let me explain why this dance is necessary ...
+    #
+    # first idea was to let MyPlugin.hook_foo return the bound on_foo method of
+    # the MyPlugin instance at the time hook_foo is evaluated. this worked due
+    # to the current implementation of sonata (the hook_foo method is queried
+    # immediately before it is called), but turned out to have problems when a
+    # wrapper function was created because there were checks on the identity of
+    # hook_foo (it is used as a key in looking up the tab to destroy when
+    # unloading)
+    #
+    # the current implementation makes sure
+    #  * no references to plugin instances are around, ever
+    #  * SomePlugin.hook_foo always has the same (identical) value
+    #  * the on_foo methods can be wrapped
+    #
+    # i might add that wrapping is necessary to catch all exceptions and avoid
+    # passing out references to the instances
+    _hook_cache = {}
     def __getattr__(cls, attr):
         if attr.startswith('hook_'):
-            instance = cls._get_instance()
-            return getattr(instance, 'on_%s'%attr[5:])
+            on_name = 'on_%s'%attr[5:]
+            if hasattr(cls, on_name):
+                cache_key = (cls, on_name)
+                if cache_key not in cls._hook_cache:
+                    def wrapped(*args, **kwargs):
+                        instance = cls._get_instance()
+                        method = getattr(instance, on_name)
+                        try:
+                            return method(*args, **kwargs)
+                        except Exception, e:
+                            logging.error("Exception in plugin %s: %s"%(cls.__name__, e))
+                    cls._hook_cache[cache_key] = wrapped
+                return cls._hook_cache[cache_key]
+            else:
+                raise AttributeError, attr # the corresponding on_... does not exist here
         else:
-            raise AttributeError, attr
+            raise AttributeError, attr # is not of a kind handled here
 
 class Plugin(object):
     """Parent class for sonata plugins for single-object-per-plugin-and-process
@@ -71,7 +102,9 @@ class Plugin(object):
         # check if del was successful in the sense that it deleted the last reference (which it should)
         if pointer() is not None:
             # yes this is brutal. in non-development situations, a warning might be sufficient
-            print pointer()
+            #
+            # this can, for example, happen if an exception is thown "outside";
+            # the exception somehow contains a reference to our object.
             raise Exception("There is still a reference to the instance lingering somewhere.")
 
         logging.debug("instance of %r successfully destroyed.", cls)

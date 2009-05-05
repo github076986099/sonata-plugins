@@ -1,7 +1,5 @@
 # encoding: utf-8
 
-# this is the magic interpreted by Sonata, referring to construct_tab below:
-
 ### BEGIN PLUGIN INFO
 # [plugin]
 # plugin_format: 0, 0
@@ -10,11 +8,11 @@
 # description: A simple musicbrainz plugin that provides additional information for musicbrainz tagged files
 # author: chrysn
 # author_email: chrysn@fsfe.org
-# url: non yet
+## url: non yet
 # [capabilities]
-# tabs: construct_tab
-# playing_song_observers: on_song_change
-# enablables: on_enable
+# tabs: MusicBrainzPlugin.hook_construct_tab
+# playing_song_observers: MusicBrainzPlugin.hook_song_change
+# enablables: MusicBrainzPlugin.hook_enablables
 ### END PLUGIN INFO
 
 
@@ -37,13 +35,10 @@
 
 ############################################# real end of plugin info
 
-
 import gtk
 
 import logging
 logging.root.setLevel(logging.INFO)
-
-from weakref import ref as weakref
 
 # not the ways sonata goes for, but more pythonic
 import sexy
@@ -52,10 +47,13 @@ import webbrowser
 # sonata imports
 from sonata import misc
 
-# up to now, no musicbrainz api used
+# musicbrainz
 import musicbrainz2.webservice as mb_ws
 import musicbrainz2.utils as mb_u
 import musicbrainz2.model as mb_mod
+
+# my preferred way of developing plugins
+from plugin_class import Plugin
 
 ############################################# might even be useful in misc
 class html(unicode):
@@ -71,26 +69,18 @@ def get_hyperlink(o, label):
     label = label or (o.getTitle() if hasattr(o, 'getTitle') else o.getName())
     return html('<a href="%s.html">%s</a>')%(o.getId(), label)
 
+class PseudoResult(object):
+    """Exception that behaves like an artist / a release / an album"""
+    def __init__(self, message):
+        self.message = message
+    def get_id(self):
+        return hash(self)
 
 ############################################# the plugin
-class MusicBrainzPlugin(object):
-    # FIXME: plugin instance stuff does not work yet; there are many creations and no deletions!
-    __singleton = staticmethod(lambda:None)
-
-    ############################### initialization
-    def __new__(cls):
-        """Implement singleton behavior in a way that if every real reference
-        to the instance is dropped (references through the class don't count
-        and are implemented as weakrefs), the singleton is destroyed
-        and re-created when neeed again"""
-        if cls.__singleton() is None:
-            r = super(cls, MusicBrainzPlugin).__new__(cls)
-            cls.__singleton = weakref(r)
-            return r
-        return cls.__singleton()
-
+class MusicBrainzPlugin(Plugin):
     def __init__(self):
         logging.info('creating new MusicBrainzPLugin instance')
+
     def __del__(self):
         # finishing things off here is quite dangerous (would, for example, not
         # work if on_link_clicked was not a staticmethod).
@@ -100,7 +90,9 @@ class MusicBrainzPlugin(object):
         logging.info('deleting MusicBrainzPLugin instance')
 
     ############################### hooks
-    def construct_tab(self):
+    def on_construct_tab(self):
+        logging.info('construct_tab called')
+
         vbox = gtk.VBox()
         self.label = sexy.UrlLabel()
         self.label.props.use_markup = True
@@ -117,6 +109,8 @@ class MusicBrainzPlugin(object):
         # _(x) == x will be a sane default
 
     def on_song_change(self, songinfo):
+        logging.info('on_song_change called, %r', songinfo)
+
         if songinfo:
             self.mb_data = self._extract_mb_data(songinfo)
 
@@ -127,7 +121,9 @@ class MusicBrainzPlugin(object):
         else:
             self.mb_data = {}
 
+        '''
         self._update_display()
+        '''
 
     ############################### recurring events
     def _extract_mb_data(self, songinfo):
@@ -144,6 +140,7 @@ class MusicBrainzPlugin(object):
         release_inc = mb_ws.ReleaseIncludes(urlRelations=True)
         track_inc = mb_ws.TrackIncludes(urlRelations=True)
         # FIXME: this is blocking. either find a way to do this w/o blocking, or move into another thread.
+        # Moreover, do this in parallel.
         if self.current['album']:
             self.current['album'] = mb_ws.Query().getReleaseById(self.current['album'], release_inc)
         if self.current['track']:
@@ -151,6 +148,7 @@ class MusicBrainzPlugin(object):
         if self.current['artist']:
             self.current['artist'] = mb_ws.Query().getArtistById(self.current['artist'], artist_inc)
         # FIXME: timeout issues when fetching "various artists" (increasing timeout would cause even longer ui lockup, cf last fixme)
+
         if self.current['albumartist']:
             if self.current['albumartist'] != '89ad4ac3-39f7-470e-963a-56509c546377': # exclude "various artists" for now
                 self.current['albumartist'] = mb_ws.Query().getArtistById(self.current['albumartist'], artist_inc)
@@ -216,26 +214,3 @@ class MusicBrainzPlugin(object):
     @staticmethod
     def on_link_clicked(widget, url):
         webbrowser.open(url)
-
-
-def construct_tab():
-    logging.info('construct_tab called')
-    return MusicBrainzPlugin().construct_tab()
-
-def on_song_change(songinfo):
-    logging.info('on_song_change called, %r', songinfo)
-    return MusicBrainzPlugin().on_song_change(songinfo)
-
-plugin_instance = None
-
-def on_enable(state):
-    # make sure the plugin instance is persistent as long as the plugin is
-    # loaded
-    global plugin_instance
-    if state == True:
-        logging.info("the MusicBrainzPlugin should report creation of a new instance and no destruction")
-        plugin_instance = MusicBrainzPlugin()
-    else:
-        logging.info("now the MusicBrainzPlugin should report its destruction")
-        plugin_instance = None
-        logging.info("did it?")
