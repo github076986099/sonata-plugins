@@ -13,6 +13,7 @@
 # tabs: MusicBrainzPlugin.hook_construct_tab
 # playing_song_observers: MusicBrainzPlugin.hook_song_change
 # enablables: MusicBrainzPlugin.hook_enablables
+# lyrics_fetching: MusicBrainzPlugin.hook_lyrics_fetching
 ### END PLUGIN INFO
 
 
@@ -123,6 +124,11 @@ class MusicBrainzPlugin(Plugin):
             self.mb_data = {}
 
         self._update_display()
+
+    def on_lyrics_fetching(self, callback, artist, title):
+        logging.info("on lyrics fetching, %r"%((callback,artist,title),))
+        logging.info("current is %r", self.current)
+        callback(None, "bad info!")
 
     ############################### recurring events
     def _extract_mb_data(self, songinfo):
