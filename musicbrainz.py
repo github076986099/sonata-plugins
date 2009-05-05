@@ -61,6 +61,7 @@ class html(unicode):
 
     def __mod__(self, args):
         # FIXME: cover the case of single and dictionary argument
+        # FIXME 2: as an exception, other instances of html should just be pasted in (as they are explicitly intended to be interpreted as html by the programmer)
         args = tuple(misc.escape_html(x) for x in args)
         return unicode(self)%args
 
@@ -121,9 +122,7 @@ class MusicBrainzPlugin(Plugin):
         else:
             self.mb_data = {}
 
-        '''
         self._update_display()
-        '''
 
     ############################### recurring events
     def _extract_mb_data(self, songinfo):
