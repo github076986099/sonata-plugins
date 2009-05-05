@@ -19,7 +19,10 @@ class meta(type):
     #  * the on_foo methods can be wrapped
     #
     # i might add that wrapping is necessary to catch all exceptions and avoid
-    # passing out references to the instances
+    # passing out references to the instances. as a compromise (between not
+    # letting references out and good exception practice of not randomly
+    # dropping any), a string representation of the exception is re-raised
+    # after reporting it via logging.
     _hook_cache = {}
     def __getattr__(cls, attr):
         if attr.startswith('hook_'):
@@ -34,6 +37,8 @@ class meta(type):
                             return method(*args, **kwargs)
                         except Exception, e:
                             logging.error("Exception in plugin %s: %s"%(cls.__name__, e))
+                            del instance, method # these deletes are crucial in not letting a reference to the plugin instance out
+                            raise Exception("There was an exception in the %s plugin (%s)."%(cls.__name__, e))
                     cls._hook_cache[cache_key] = wrapped
                 return cls._hook_cache[cache_key]
             else:
