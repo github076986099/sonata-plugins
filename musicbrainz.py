@@ -59,13 +59,31 @@ from plugin_class import Plugin
 
 ############################################# might even be useful in misc
 class html(unicode):
-    """just like a unicode object, but will escape all arguments to % formatting"""
+    """just like a unicode object, but will escape all arguments to %
+    formatting (except if they are html themselves) or .join()."""
+
+    @classmethod
+    def __escape(cls, item):
+        if isinstance(item, cls):
+            # these are not the bad characters you are looking for.
+            return item
+        else:
+            return misc.escape_html(item)
 
     def __mod__(self, args):
-        # FIXME: cover the case of single and dictionary argument
-        # FIXME 2: as an exception, other instances of html should just be pasted in (as they are explicitly intended to be interpreted as html by the programmer)
-        args = tuple(misc.escape_html(x) for x in args)
-        return unicode(self)%args
+        if isinstance(args, tuple):
+            args = tuple(map(self.__escape, args))
+        elif isinstance(args, dict):
+            args = dict((k, self.__escape(v)) for (k,v) in args.iteritems())
+        else:
+            args = self.__escape(args)
+        return html(unicode(self)%args)
+
+    def join(self, chunks):
+        return html(unicode.join(self, map(self.__escape, chunks)))
+
+    def __repr__(self):
+        return u'html(%s)'%unicode.__repr__(self)
 
 ############################################# musicbrainz helpers
 def get_hyperlink(o, label):
@@ -151,10 +169,12 @@ class MusicBrainzDisplay(gtk.VBox):
                     if rel.getType() in self.relation_type2label:
                         links.append(html('<a href="%s">%s</a>')%(rel.getTargetId(), self.relation_type2label[rel.getType()]))
                     else:
-                        links.append(html(u"%s → %s"%(rel.getType(), rel.getTargetId())))
+                        links.append(html(u"%s → %s")%(rel.getType(), rel.getTargetId()))
                         logging.warning("No information on how to display relations of type %r", rel.getType())
 
-                infos.append(html('<b>%s:</b> %s')%(label, current_name) + ' <small>(%s)</small>'%(", ".join(links),))
+                link_html = html(", ").join(links)
+
+                infos.append(html('<b>%s:</b> %s <small>(%s)</small>')%(label, current_name, link_html))
 
         self.label.set_markup('\n'.join(infos))
 
