@@ -1,3 +1,5 @@
+import sys
+import traceback
 import logging
 import weakref
 
@@ -35,10 +37,12 @@ class meta(type):
                         method = getattr(instance, on_name)
                         try:
                             return method(*args, **kwargs)
-                        except Exception, e:
-                            logging.error("Exception in plugin %s: %s"%(cls.__name__, e))
+                        except:
+                            e_type, e_value, e_traceback = sys.exc_info()
+                            logging.error("Exception in plugin %s: %s"%(cls.__name__, e_value))
+                            logging.info("".join(traceback.format_exception(e_type, e_value, e_traceback)))
                             del instance, method # these deletes are crucial in not letting a reference to the plugin instance out
-                            raise Exception("There was an exception in the %s plugin (%s)."%(cls.__name__, e))
+                            raise Exception("There was an exception in the %s plugin (%s)."%(cls.__name__, e_value))
                     cls._hook_cache[cache_key] = wrapped
                 return cls._hook_cache[cache_key]
             else:
