@@ -5,7 +5,8 @@ what this is
 ---------------------
 
 a sonata plugin that interprets files' metadata about musicbrainz, queries the
-musicbrainz server and displays information acquired (currently, only hyperlinks).
+musicbrainz server and displays information acquired (currently, only
+hyperlinks).
 
 by doing so, the plugin tries to explore the needs of plugins in sonata.
 
@@ -25,11 +26,16 @@ no caching is done, resulting in hits on the mb servers on every track change
 (this is even a security issue, enabling them to track what you hear, in
 theory). will have to investigate if there is some cross-app way of doing so.
 
-no asynchronous processing or threaded processing is done, resulting in user
-interface lockup while the queries are processed.
+plugin_class.py
+================================
 
-the on_change_song hook is implemented very crudely, so exceptions thrown from
-the plugin stop album art from working.
+as i prefer an object based approach to plugins over a couple of callbacks,
+i've created this framework for sonata plugins. its main class, Plugin (a base
+class for plugins) gives the child classes hook_foobar functions that can be
+registered as capabilities and call the on_foobar functions. a particular
+callback, hook_enablables, is special in that it manages the creation and
+destruction of a single instance of the plugin class. care is taken not to let
+that instance be referenced somewhere where the reference is not removed in
+time, so the object can really be deleted when the plugin is switched off.
 
-a side effect of the current implementation is that on sonata startup, no
-on_change_song is emitted and therefore the musicbrainz tab stays blank.
+see class_based_demo.py for an example, or just look at musicbrainz.py.
