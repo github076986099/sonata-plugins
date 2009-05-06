@@ -56,9 +56,12 @@ class Plugin(object):
 
     For a usage example, see class_based_demo.py.
 
-    Capabilities have to be announced to sonata as MyClass.hook_something, which is a wrapper for MyClass.on_something(self, ...).
+    Capabilities have to be announced to sonata as MyClass.hook_something,
+    which is a wrapper for MyClass.on_something(self, ...).
 
-    The something part can be arbitrary but for the enablables capability, for which it has to be hook_enablables / on_enablables (the on_enabables will be called after creation and before destruction of the object).
+    The something part can be arbitrary but for the enablables capability, for
+    which it has to be hook_enablables / on_enablables (the on_enablables will
+            be called after creation and before destruction of the object).
     """
 
     __metaclass__ = meta
@@ -70,6 +73,7 @@ class Plugin(object):
         # drops any return values. can plugins defend against being
         # switched off? if yes, this will have to be respected here.
         if state:
+            logging.info("Creating plugin instance %r", cls.__name__)
             instance = cls.__create_instance()
             if hasattr(instance, 'on_enablables'):
                 instance.on_enablables(True)
@@ -79,6 +83,7 @@ class Plugin(object):
                 instance.on_enablables(False)
             del instance
             cls.__destroy_instance()
+            logging.info("Destroyed plugin instance %r", cls.__name__)
 
     @classmethod
     def _get_instance(cls):

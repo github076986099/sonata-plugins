@@ -36,6 +36,9 @@
 
 ############################################# real end of plugin info
 
+from __future__ import with_statement
+
+import threading
 import gtk
 
 import logging
@@ -182,54 +185,39 @@ class MusicBrainzDisplay(gtk.VBox):
     def on_link_clicked(widget, url):
         webbrowser.open(url)
 
-############################################# the plugin
-class MusicBrainzPlugin(Plugin):
-    ############################### object maintenance (for now, only logging. might do things like opening and closing the musicbrainz cache once there is one)
+############################################# the thread fetching the data
+class MusicBrainzDownloadThread(threading.Thread):
+    # FIXME: this is a single use run once thread created once per fetching
+    # data. ideally, there should be one thread doing all the work as long as
+    # the plugin is loaded
+    def __init__(self, songinfo, display, lock):
+        self.songinfo = songinfo
+        self.display = display
+        self.lock = lock
+        super(MusicBrainzDownloadThread, self).__init__()
+        self.daemon = True # not needed any more when sonata quits
 
-    def __init__(self):
-        logging.info('creating new MusicBrainzPLugin instance')
+        self.die = False # this will be set to True from outside if the thread has been running for too long
 
-    def __del__(self):
-        # finishing things off here is quite dangerous (would, for example, not
-        # work if on_link_clicked was not a staticmethod).
-        # having a proper close() method that also finished off the singleton
-        # instance would make things easier, yet still leave the issue of
-        # objects staying in memory longer than they need.
-        logging.info('deleting MusicBrainzPLugin instance')
+    def run(self):
+        mb_data = self.extract_mb_data(self.songinfo)
 
-    ############################### hooks
-    def on_construct_tab(self):
-        logging.info('construct_tab called')
+        with self.lock:
+            if self.die:
+                logging.warning("Received data from musicbrainz, but the plugin does not want them any more.")
+                return
 
-        self.display = MusicBrainzDisplay()
-        self.display.show_all()
-
-        # means new_tab(page, stock, text, focus)
-        return (self.display, None, _("MusicBrainz"), None)
-
-    def on_song_change(self, songinfo):
-        if songinfo:
-            self.display.set_fetching()
-            mb_data = self._extract_mb_data(songinfo)
             self.display.set_data(mb_data)
-        else:
-            self.display.set_empty()
 
-    def on_lyrics_fetching(self, callback, artist, title):
-        logging.info("on lyrics fetching, %r"%((callback,artist,title),))
-        callback(None, "bad data, i want songinfo!")
-
-    ############################### recurring events
-    def _extract_mb_data(self, songinfo):
-        """Store the musicbrainz data in the plugin object for easy access, set
-        to None if not present"""
-
+    @staticmethod
+    def extract_mb_data(songinfo): # this just happens to be executed inside a thread, nothing threading specific here
         ids = {
                 'album': songinfo.get('musicbrainz_albumid', None),
                 'albumartist': songinfo.get('musicbrainz_albumartistid', None),
                 'artist': songinfo.get('musicbrainz_artistid', None),
                 'track': songinfo.get('musicbrainz_trackid', None), # for mp3, starts working after mpd bug #2324 is fixed; after 0.15beta1
                 }
+
         # mb library: take all urls you can get
         artist_inc = mb_ws.ArtistIncludes(urlRelations=True)
         release_inc = mb_ws.ReleaseIncludes(urlRelations=True)
@@ -237,8 +225,7 @@ class MusicBrainzPlugin(Plugin):
 
         mb_data = {}
 
-        # FIXME: this is blocking. either find a way to do this w/o blocking, or move into another thread.
-        # Moreover, do this in parallel.
+        # FIXME: Do this in parallel or even better in one query.
         if ids['album']:
             mb_data['album'] = mb_ws.Query().getReleaseById(ids['album'], release_inc)
         if ids['track']:
@@ -246,8 +233,60 @@ class MusicBrainzPlugin(Plugin):
         if ids['artist']:
             mb_data['artist'] = mb_ws.Query().getArtistById(ids['artist'], artist_inc)
         if ids['albumartist']:
-            # FIXME: timeout issues when fetching "various artists" (increasing timeout would cause even longer ui lockup, cf last fixme)
+            # FIXME: timeout issues when fetching "various artists"
             if ids['albumartist'] != '89ad4ac3-39f7-470e-963a-56509c546377': # exclude "various artists" for now
                 mb_data['albumartist'] = mb_ws.Query().getArtistById(ids['albumartist'], artist_inc)
 
         return mb_data
+
+############################################# the plugin
+class MusicBrainzPlugin(Plugin):
+    ############################### object maintenance
+
+    def __init__(self):
+        # download threads have to acquire this for checking if they should
+        # really update the display (or just die) and updating the display.
+        self.fetcher_lock = threading.Lock()
+
+        # this variable makes sure the plugin knows which thread (there can
+        # only be one) to tell to just die instead of setting the display
+        # before a new thread is created. the lock prevents a situation in
+        # which a thread checks that it does not need to die, and much later
+        # (after a new thread has been created and possibly started setting
+        # data itself) overwrite the display.
+        self.fetcher_thread = None
+
+    def __del__(self):
+        # when the plugin_class framework finally admits failure to guarantee
+        # __del__etion, rename this to close
+        self._close_fetcher_thread()
+
+    def _close_fetcher_thread(self):
+        if self.fetcher_thread is not None:
+            self.fetcher_thread.die = True # instead of updating the display, just die. i would immediately raise a YouAreUselessNow exception in the thread if i knew how to do that.
+            del self.fetcher_thread.display # the thread is supposed not to access it any more anyway, and another reference is freed, which is good i suppose
+            self.fetcher_thread = None
+
+    ############################### hooks
+    def on_construct_tab(self):
+        self.display = MusicBrainzDisplay()
+        self.display.show_all()
+
+        # means new_tab(page, stock, text, focus)
+        return (self.display, None, _("MusicBrainz"), None)
+
+    def on_song_change(self, songinfo):
+        self._close_fetcher_thread()
+
+        if songinfo:
+            self.display.set_fetching()
+
+            self.fetcher_thread = MusicBrainzDownloadThread(songinfo, self.display, self.fetcher_lock)
+            self.fetcher_thread.start()
+            # songs will be fetched in background now
+        else:
+            self.display.set_empty()
+
+    def on_lyrics_fetching(self, callback, artist, title):
+        logging.info("on lyrics fetching, %r"%((callback,artist,title),))
+        callback(None, "bad data, i want songinfo!")
