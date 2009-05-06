@@ -39,3 +39,43 @@ that instance be referenced somewhere where the reference is not removed in
 time, so the object can really be deleted when the plugin is switched off.
 
 see class_based_demo.py for an example, or just look at musicbrainz.py.
+
+sonata plugin api wishlist
+=============================
+
+(draft; maybe some of this is already working)
+
+multi-source album art and lyrics
+--------------------------------------
+
+different plugins can hook to the lyrics and return (image, level_of_trust)
+tuples. for instance, the builtin lyricwiki can give an educated guess and will
+thus return ("~/.lyrics/Foo: Bar", 50), while the musicbrainz plugin can be
+sure by matching the musicbrainz tag id, giving ("~/.lyrics/0000-11111-...-ffff", 90).
+
+for album art, an embedded album art image could give a (,100) answer because
+it's in the metadata and we assume them to be correct. (this example indicates
+that it might be better to pass an open file descriptor (or StringIO object)
+back instead of a filename.)
+
+at the same time, plugins might be interested in seeing other plugins' answers
+so they can offer enhancing their data set, whichever it is.
+
+caching has to be done on a per-plugin base (maybe coordinated, but in no case
+enforced) as it is not applicable in some cases (eg embedded album art would
+not need any caching).
+
+real song object
+-------------------------
+
+the current song is one of the few ways for the plugins to really interact with
+sonata. having to use mpdh to query it for attributes is not very object
+oriented. the object could then provide methods like .get_filename(), so
+plugins can follow the mpd to filesystem mapping of sonata without thinking
+about connections.
+
+per-plugin gettext
+--------------------
+
+i have no idea how this should be implemented, so for now this is just a note
+not to forget that this could become an issue if plugins should be trranslated.
