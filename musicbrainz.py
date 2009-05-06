@@ -183,7 +183,15 @@ class MusicBrainzDisplay(gtk.VBox):
     def set_empty(self):
         self.label.set_markup(_("No current song."))
 
+    def set_untagged(self):
+        # FIXME: offer to launch picard
+        self.label.set_markup(_("Current song has no MusicBrainz tags."))
+
     def set_data(self, mb_data):
+        if not mb_data:
+            self.set_untagged()
+            return
+
         # will manipulate data
         mb_data = mb_data.copy()
 
