@@ -1,10 +1,12 @@
 # encoding: utf-8
 
+from __future__ import with_statement
+
 ### BEGIN PLUGIN INFO
 # [plugin]
 # plugin_format: 0, 0
 # name: Musicbrainz plugin
-# version: 0, 0, 0
+# version: 0, 0, 1
 # description: A simple musicbrainz plugin that provides additional information for musicbrainz tagged files
 # author: chrysn
 # author_email: chrysn@fsfe.org
@@ -16,6 +18,44 @@
 # lyrics_fetching: MusicBrainzPlugin.hook_lyrics_fetching
 ### END PLUGIN INFO
 
+
+############################################# general blah blah
+#
+# Version history:
+# 0.0.1: first usable (because non-blocking) version
+__version__ = "0.0.1"
+#
+#
+# Points that need to be fixed for future releases:
+#  * have caching for MusicBrainz metadata
+#  * enhance display of fan page, Wikipedia and online communities (there can
+#    be more than one and additional information is required)
+#  * use Amazon ASIN to reliably identify the cover image
+#  * use MusicBrainz track id to uniquely identify lyrics
+#  * offer creating the required information from the current (guessed)
+#    implementation if the user decides that the guess is correct
+#
+# License:
+#   Copyright (C) 2009 chrysn <chrysn@fsfe.org>
+__author__ = "chrysn <chrysn@fsfe.org>"
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+__licence__ = "GPLv3+"
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+
+############################################# a suggestion for the plugin framework
 
 # maybe we should not have capabilities, but just specify the
 # class name like:
@@ -34,9 +74,8 @@
 # the TabConstructor etc would work like interfaces (python3: ABCs), which
 # define well known method calls like construct_tabs
 
-############################################# real end of plugin info
 
-from __future__ import with_statement
+############################################# code starts here
 
 import threading
 import gtk

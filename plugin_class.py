@@ -1,3 +1,9 @@
+"""Object based plugin framework extension for sonata
+
+See Plugin class documentation, from which you have to inherit if you want to
+use this module.
+"""
+
 import sys
 import traceback
 import logging
